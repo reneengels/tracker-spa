@@ -85,8 +85,8 @@ export interface TransitionTaskRequest {
 
 async function extractErrorMessage(response: Response, fallback: string): Promise<string> {
     try {
-        const body = (await response.json()) as { detail?: string };
-        return body.detail ?? fallback;
+        const body = (await response.json()) as { message?: string };
+        return body.message ?? fallback;
     } catch {
         return fallback;
     }
@@ -110,7 +110,8 @@ export async function listTasks(): Promise<Task[]> {
             response.status
         );
     }
-    return (await response.json()) as Task[];
+    const envelope = (await response.json()) as SuccessEnvelope<Task[]>;
+    return envelope.data;
 }
 
 export async function createTask(input: CreateTaskRequest): Promise<Task> {
@@ -124,7 +125,8 @@ export async function createTask(input: CreateTaskRequest): Promise<Task> {
             response.status
         );
     }
-    return (await response.json()) as Task;
+    const envelope = (await response.json()) as SuccessEnvelope<Task>;
+    return envelope.data;
 }
 
 export async function transitionTask(
@@ -141,5 +143,6 @@ export async function transitionTask(
             response.status
         );
     }
-    return (await response.json()) as Task;
+    const envelope = (await response.json()) as SuccessEnvelope<Task>;
+    return envelope.data;
 }

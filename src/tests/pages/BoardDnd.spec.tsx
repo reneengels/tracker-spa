@@ -60,7 +60,11 @@ describe("Board drag-and-drop", () => {
         server.use(
             http.post("http://localhost:8000/tasks/:id/transitions", () =>
                 HttpResponse.json(
-                    { detail: "Não é possível mover de Triagem para Pronto diretamente." },
+                    {
+                        success: false,
+                        error_code: "INVALID_TRANSITION",
+                        message: "Não é possível mover de Triagem para Pronto diretamente.",
+                    },
                     { status: 409 }
                 )
             )

@@ -60,14 +60,17 @@ export const handlers = [
     }),
 
     http.get("http://localhost:8000/tasks", () => {
-        return HttpResponse.json(tasks);
+        return HttpResponse.json({ success: true, message: "OK", data: tasks });
     }),
 
     http.post("http://localhost:8000/tasks", async ({ request }) => {
         const body = (await request.json()) as { title: string; description: string };
         const task = makeTask({ title: body.title, description: body.description });
         tasks.push(task);
-        return HttpResponse.json(task, { status: 201 });
+        return HttpResponse.json(
+            { success: true, message: "Task created", data: task },
+            { status: 201 }
+        );
     }),
 
     http.post("http://localhost:8000/tasks/:id/transitions", async ({ params, request }) => {
@@ -77,6 +80,6 @@ export const handlers = [
             return new HttpResponse(null, { status: 404 });
         }
         task.status = body.to_status;
-        return HttpResponse.json(task);
+        return HttpResponse.json({ success: true, message: "Task transitioned", data: task });
     }),
 ];
