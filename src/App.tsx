@@ -2,6 +2,7 @@ import './App.scss';
 import {Routes, Route} from 'react-router';
 import Home from "./pages/Home.tsx";
 import About from "./pages/About.tsx";
+import Board from "./pages/Board.tsx";
 
 export default function App() {
     return (
@@ -9,6 +10,7 @@ export default function App() {
             <Routes>
                 <Route path="/" element={<Home/>}/>
                 <Route path="/about" element={<About/>}/>
+                <Route path="/board" element={<Board/>}/>
             </Routes>
         </>
     )

@@ -1,6 +1,9 @@
-# React + TypeScript + Vite
+# tracker-spa
 
-This template provides a complete, modern setup for React applications using Vite, TypeScript, TailwindCSS, ESLint, i18n, and Vitest. It is the ideal starting point for scalable and maintainable projects.
+Factory's tracker frontend — scaffolded from
+[`vite-react-typescript-template`](https://github.com/reneengels/vite-react-typescript-template).
+React + TypeScript + Vite, with TailwindCSS, ESLint, i18n, Vitest, and TanStack Query already wired
+up. The `/board` route is currently a placeholder — the real Board Kanban screen lands in ticket 01.
 
 ## Key Versions
 
@@ -14,6 +17,7 @@ This template provides a complete, modern setup for React applications using Vit
 | TailwindCSS            | ^4.1.13    |
 | i18next                | ^25.5.2    |
 | react-router           | ^7.8.2     |
+| @tanstack/react-query  | ^5.90.2    |
 
 ## Features
 
@@ -22,6 +26,8 @@ This template provides a complete, modern setup for React applications using Vit
 - **TailwindCSS**: Utility-first CSS framework for rapid UI development.
 - **ESLint**: Strict, type-based linting rules for clean code.
 - **Internationalization (i18n)**: Example translations for multiple languages included.
+- **TanStack Query**: `QueryClientProvider` configured at the app root, ready for the real API
+  calls added in later tickets.
 - **Vitest**: Test setup for components and pages included.
 - **PostCSS & SCSS**: Modern styling options.
 - **Well-structured project layout**: Easy to extend and collaborate in teams.
@@ -30,8 +36,8 @@ This template provides a complete, modern setup for React applications using Vit
 
 1. **Clone the repository**
    ```bash
-   git clone <repo-url>
-   cd vite-base
+   git clone git@github.com:reneengels/tracker-spa.git
+   cd tracker-spa
    ```
 2. **Install dependencies**
    ```bash
@@ -41,6 +47,7 @@ This template provides a complete, modern setup for React applications using Vit
    ```bash
    yarn dev
    ```
+   Visit `http://localhost:5173` (Home) or `http://localhost:5173/board` (placeholder Board).
 4. **Run tests**
    ```bash
    yarn test
