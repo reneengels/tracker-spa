@@ -51,6 +51,12 @@ export async function login(credentials: LoginRequest): Promise<LoginResponse> {
     return envelope.data;
 }
 
+export interface Collaborator {
+    id: string;
+    name: string;
+    type: "human" | "ai_agent";
+}
+
 export interface Task {
     id: string;
     task_key: string;
@@ -71,6 +77,7 @@ export interface Task {
     version: number;
     created_at: string;
     updated_at: string;
+    collaborators: Collaborator[];
 }
 
 export interface CreateTaskRequest {
@@ -140,6 +147,34 @@ export async function transitionTask(
     if (!response.ok) {
         throw new ApiError(
             await extractErrorMessage(response, "Não foi possível mover a tarefa."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<Task>;
+    return envelope.data;
+}
+
+export async function joinTask(taskId: string): Promise<Task> {
+    const response = await authenticatedFetch(`/tasks/${taskId}/collaborators`, {
+        method: "POST",
+    });
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível entrar na tarefa."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<Task>;
+    return envelope.data;
+}
+
+export async function leaveTask(taskId: string): Promise<Task> {
+    const response = await authenticatedFetch(`/tasks/${taskId}/collaborators`, {
+        method: "DELETE",
+    });
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível sair da tarefa."),
             response.status
         );
     }

@@ -2,15 +2,69 @@ import { useState } from "react";
 import type { DragEvent, FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { createTask, listTasks, transitionTask, type Task } from "@/lib/api";
+import { createTask, joinTask, leaveTask, listTasks, transitionTask, type Task } from "@/lib/api";
 import { ApiError } from "@/lib/api";
 import { BOARD_COLUMNS, type TaskStatus } from "@/lib/taskStatus";
 import { Button } from "@/components/ui/button.tsx";
+import { useAuth } from "@/lib/auth";
 
 const TASKS_QUERY_KEY = ["tasks"] as const;
 const DRAG_DATA_FORMAT = "application/x-factory-task-id";
 
+function initials(name: string): string {
+    return name
+        .split(" ")
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase())
+        .join("");
+}
+
+function CollaboratorAvatars({ collaborators }: { collaborators: Task["collaborators"] }) {
+    if (collaborators.length === 0) {
+        return <span className="text-xs text-slate-400">Sem colaboradores</span>;
+    }
+    return (
+        <div className="flex -space-x-2">
+            {collaborators.map((collaborator) => (
+                <span
+                    key={collaborator.id}
+                    role="img"
+                    aria-label={`${collaborator.name} (${collaborator.type === "ai_agent" ? "agente" : "humano"})`}
+                    title={collaborator.name}
+                    className={`inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-white text-[10px] font-semibold text-white ${
+                        collaborator.type === "ai_agent" ? "bg-violet-500" : "bg-sky-500"
+                    }`}
+                >
+                    {initials(collaborator.name)}
+                </span>
+            ))}
+        </div>
+    );
+}
+
 function TaskCard({ task }: { task: Task }) {
+    const { session } = useAuth();
+    const queryClient = useQueryClient();
+    const currentActorId = session?.actorId ?? null;
+    const isCollaborator = currentActorId
+        ? task.collaborators.some((collaborator) => collaborator.id === currentActorId)
+        : false;
+
+    const collaboratorMutation = useMutation({
+        mutationFn: () => (isCollaborator ? leaveTask(task.id) : joinTask(task.id)),
+        onSuccess: () => {
+            void queryClient.invalidateQueries({ queryKey: TASKS_QUERY_KEY });
+        },
+        onError: (error) => {
+            toast.error(
+                error instanceof ApiError
+                    ? error.message
+                    : "Não foi possível atualizar os colaboradores."
+            );
+        },
+    });
+
     const handleDragStart = (event: DragEvent<HTMLDivElement>) => {
         event.dataTransfer.setData(DRAG_DATA_FORMAT, task.id);
         event.dataTransfer.effectAllowed = "move";
@@ -26,6 +80,20 @@ function TaskCard({ task }: { task: Task }) {
         >
             <p className="text-xs font-mono text-slate-400">{task.task_key}</p>
             <p className="text-sm font-medium text-slate-800">{task.title}</p>
+            <div className="mt-2 flex items-center justify-between">
+                <CollaboratorAvatars collaborators={task.collaborators} />
+                <button
+                    type="button"
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        collaboratorMutation.mutate();
+                    }}
+                    disabled={collaboratorMutation.isPending}
+                    className="text-xs font-medium text-sky-600 hover:underline disabled:opacity-50"
+                >
+                    {isCollaborator ? "Sair" : "Pegar esta tarefa"}
+                </button>
+            </div>
         </div>
     );
 }

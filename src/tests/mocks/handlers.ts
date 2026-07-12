@@ -1,10 +1,13 @@
 import { http, HttpResponse } from "msw";
 import type { Task } from "@/lib/api";
 
-const VALID_ACCESS_TOKEN =
+export const VALID_ACCESS_TOKEN =
     "eyJhbGciOiAiSFMyNTYiLCAidHlwIjogIkpXVCJ9." +
     "eyJzdWIiOiAicG8tdXNlciIsICJyb2xlIjogIlBPIn0." +
     "test-signature";
+
+/** The actor id encoded in `VALID_ACCESS_TOKEN`'s `sub` claim — join/leave mocks act as this user. */
+export const MOCK_CURRENT_ACTOR = { id: "po-user", name: "PO User", type: "human" as const };
 
 let tasks: Task[] = [];
 let nextSequence = 1;
@@ -37,6 +40,7 @@ export function makeTask(overrides: Partial<Task> = {}): Task {
         version: overrides.version ?? 1,
         created_at: overrides.created_at ?? new Date(0).toISOString(),
         updated_at: overrides.updated_at ?? new Date(0).toISOString(),
+        collaborators: overrides.collaborators ?? [],
     };
 }
 
@@ -81,5 +85,25 @@ export const handlers = [
         }
         task.status = body.to_status;
         return HttpResponse.json({ success: true, message: "Task transitioned", data: task });
+    }),
+
+    http.post("http://localhost:8000/tasks/:id/collaborators", ({ params }) => {
+        const task = tasks.find((candidate) => candidate.id === params.id);
+        if (!task) {
+            return new HttpResponse(null, { status: 404 });
+        }
+        if (!task.collaborators.some((c) => c.id === MOCK_CURRENT_ACTOR.id)) {
+            task.collaborators = [...task.collaborators, MOCK_CURRENT_ACTOR];
+        }
+        return HttpResponse.json({ success: true, message: "Joined task", data: task });
+    }),
+
+    http.delete("http://localhost:8000/tasks/:id/collaborators", ({ params }) => {
+        const task = tasks.find((candidate) => candidate.id === params.id);
+        if (!task) {
+            return new HttpResponse(null, { status: 404 });
+        }
+        task.collaborators = task.collaborators.filter((c) => c.id !== MOCK_CURRENT_ACTOR.id);
+        return HttpResponse.json({ success: true, message: "Left task", data: task });
     }),
 ];

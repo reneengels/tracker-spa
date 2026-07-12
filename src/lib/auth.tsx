@@ -8,6 +8,7 @@ interface Session {
     accessToken: string;
     refreshToken: string;
     role: SessionRole | null;
+    actorId: string | null;
 }
 
 interface AuthContextValue {
@@ -26,7 +27,12 @@ function readStoredSession(): Session | null {
         return null;
     }
     const claims = decodeJwtClaims(accessToken);
-    return { accessToken, refreshToken, role: claims?.role ?? null };
+    return {
+        accessToken,
+        refreshToken,
+        role: claims?.role ?? null,
+        actorId: claims?.sub ?? null,
+    };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -39,6 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             accessToken: response.access_token,
             refreshToken: response.refresh_token,
             role: claims?.role ?? null,
+            actorId: claims?.sub ?? null,
         });
     };
 

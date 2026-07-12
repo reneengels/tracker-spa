@@ -4,7 +4,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { http, HttpResponse } from "msw";
 import { server } from "../mocks/server";
-import { resetTasks, makeTask } from "../mocks/handlers";
+import { resetTasks, makeTask, VALID_ACCESS_TOKEN, MOCK_CURRENT_ACTOR } from "../mocks/handlers";
+import { setTokens } from "@/lib/tokenStorage";
+import { AuthProvider } from "@/lib/auth";
 import Board from "../../pages/Board.tsx";
 
 function createDataTransfer() {
@@ -16,12 +18,18 @@ function createDataTransfer() {
     } as unknown as DataTransfer;
 }
 
+function logInAsMockActor() {
+    setTokens(VALID_ACCESS_TOKEN, "refresh-token-value");
+}
+
 function renderBoard() {
     const queryClient = new QueryClient();
     return render(
         <QueryClientProvider client={queryClient}>
-            <Toaster />
-            <Board />
+            <AuthProvider>
+                <Toaster />
+                <Board />
+            </AuthProvider>
         </QueryClientProvider>
     );
 }
@@ -86,5 +94,34 @@ describe("Board drag-and-drop", () => {
         expect(
             within(screen.getByRole("region", { name: "Pronto" })).queryByText("FAC-1")
         ).not.toBeInTheDocument();
+    });
+});
+
+describe("Board collaborators", () => {
+    it('adds the logged-in user\'s avatar via "Pegar esta tarefa" and removes it via "Sair"', async () => {
+        resetTasks([
+            makeTask({ id: "task-1", task_key: "FAC-1", title: "Escrever specs", status: "TRIAGEM" }),
+        ]);
+        logInAsMockActor();
+        renderBoard();
+
+        const card = await screen.findByRole("article", { name: "Escrever specs" });
+        expect(within(card).getByText("Sem colaboradores")).toBeInTheDocument();
+
+        fireEvent.click(within(card).getByRole("button", { name: "Pegar esta tarefa" }));
+
+        await waitFor(() => {
+            expect(
+                within(card).getByRole("img", { name: `${MOCK_CURRENT_ACTOR.name} (humano)` })
+            ).toBeInTheDocument();
+        });
+        expect(within(card).getByRole("button", { name: "Sair" })).toBeInTheDocument();
+
+        fireEvent.click(within(card).getByRole("button", { name: "Sair" }));
+
+        await waitFor(() => {
+            expect(within(card).getByText("Sem colaboradores")).toBeInTheDocument();
+        });
+        expect(within(card).getByRole("button", { name: "Pegar esta tarefa" })).toBeInTheDocument();
     });
 });
