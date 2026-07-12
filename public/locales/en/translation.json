@@ -1,0 +1,13 @@
+{
+  "title": "Welcome to our Application",
+  "click": "Click on the Vite and React logos to learn more",
+  "about": "About",
+  "home": "Home",
+  "back": "Back",
+  "count": "Count is",
+  "save_hmr": "and save to test HMR",
+  "edit": "Edit",
+  "about_title": "About this Application",
+  "about_content": "This page shows information about the project. Use the back button to return to the previous page.",
+  "version_info": "Starter template for Vite + React with React Router, i18next, Tailwind CSS, SCSS, and Vitest."
+}
