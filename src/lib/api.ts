@@ -12,6 +12,17 @@ export interface LoginResponse {
     token_type: string;
 }
 
+/**
+ * Every tracker-api response body is wrapped in this envelope
+ * (app/schemas/api/base.py `SuccessResponse`/`ErrorResponse`) — the
+ * actual payload lives under `data`, and error messages under `message`.
+ */
+interface SuccessEnvelope<T> {
+    success: boolean;
+    message: string;
+    data: T;
+}
+
 export class ApiError extends Error {
     readonly status: number;
 
@@ -33,5 +44,6 @@ export async function login(credentials: LoginRequest): Promise<LoginResponse> {
         throw new ApiError("Invalid username or password", response.status);
     }
 
-    return (await response.json()) as LoginResponse;
+    const envelope = (await response.json()) as SuccessEnvelope<LoginResponse>;
+    return envelope.data;
 }

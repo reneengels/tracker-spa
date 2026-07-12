@@ -11,9 +11,13 @@ export const handlers = [
 
         if (body.username === "po" && body.password === "correct-horse") {
             return HttpResponse.json({
-                access_token: VALID_ACCESS_TOKEN,
-                refresh_token: "refresh-token-value",
-                token_type: "bearer",
+                success: true,
+                message: "Login successful",
+                data: {
+                    access_token: VALID_ACCESS_TOKEN,
+                    refresh_token: "refresh-token-value",
+                    token_type: "bearer",
+                },
             });
         }
 
