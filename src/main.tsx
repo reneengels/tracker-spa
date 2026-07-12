@@ -6,16 +6,19 @@ import App from './App.tsx';
 import { StrictMode } from "react";
 import './i18n.tsx';
 import { Toaster } from "sonner";
+import { AuthProvider } from "@/lib/auth";
 
 const queryClient = new QueryClient();
 
 createRoot(document.getElementById('root')!).render(
     <StrictMode>
         <QueryClientProvider client={queryClient}>
-            <BrowserRouter>
-                <Toaster />
-                <App/>
-            </BrowserRouter>
+            <AuthProvider>
+                <BrowserRouter>
+                    <Toaster />
+                    <App/>
+                </BrowserRouter>
+            </AuthProvider>
         </QueryClientProvider>
     </StrictMode>
 );

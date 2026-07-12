@@ -1,6 +1,14 @@
 import '@testing-library/jest-dom';
 import * as React from 'react';
-import { vi } from 'vitest';
+import { vi, beforeAll, afterEach, afterAll } from 'vitest';
+import { server } from './src/tests/mocks/server';
+
+beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+afterEach(() => {
+    server.resetHandlers();
+    localStorage.clear();
+});
+afterAll(() => server.close());
 
 // Define props type for components wrapped withTranslation HOC
 type WrappedComponentProps = {
