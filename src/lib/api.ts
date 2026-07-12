@@ -1,3 +1,6 @@
+import { getAccessToken } from "@/lib/tokenStorage";
+import type { TaskStatus } from "@/lib/taskStatus";
+
 const API_BASE_URL: string =
     (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8000";
 
@@ -46,4 +49,97 @@ export async function login(credentials: LoginRequest): Promise<LoginResponse> {
 
     const envelope = (await response.json()) as SuccessEnvelope<LoginResponse>;
     return envelope.data;
+}
+
+export interface Task {
+    id: string;
+    task_key: string;
+    title: string;
+    description: string;
+    status: TaskStatus;
+    priority: "URGENT" | "HIGH" | "NORMAL" | "LOW";
+    due_date: string | null;
+    estimate_value: number | null;
+    estimate_unit: "POINTS" | null;
+    type: "FEATURE" | "AJUSTE" | "SUGESTAO" | "REWORK";
+    rework_origin_stage: string | null;
+    last_return_reason: string | null;
+    return_count: number;
+    tags: string[] | null;
+    demand_source: "PO" | "BOT" | "CANAL" | "AGENTE_PO";
+    parent_task_id: string | null;
+    version: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface CreateTaskRequest {
+    title: string;
+    description: string;
+}
+
+export interface TransitionTaskRequest {
+    to_status: TaskStatus;
+    reason?: string;
+}
+
+async function extractErrorMessage(response: Response, fallback: string): Promise<string> {
+    try {
+        const body = (await response.json()) as { detail?: string };
+        return body.detail ?? fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+async function authenticatedFetch(path: string, init: RequestInit = {}): Promise<Response> {
+    const accessToken = getAccessToken();
+    const headers = new Headers(init.headers);
+    headers.set("Content-Type", "application/json");
+    if (accessToken) {
+        headers.set("Authorization", `Bearer ${accessToken}`);
+    }
+    return fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+}
+
+export async function listTasks(): Promise<Task[]> {
+    const response = await authenticatedFetch("/tasks");
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível carregar as tarefas."),
+            response.status
+        );
+    }
+    return (await response.json()) as Task[];
+}
+
+export async function createTask(input: CreateTaskRequest): Promise<Task> {
+    const response = await authenticatedFetch("/tasks", {
+        method: "POST",
+        body: JSON.stringify(input),
+    });
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível criar a tarefa."),
+            response.status
+        );
+    }
+    return (await response.json()) as Task;
+}
+
+export async function transitionTask(
+    taskId: string,
+    input: TransitionTaskRequest
+): Promise<Task> {
+    const response = await authenticatedFetch(`/tasks/${taskId}/transitions`, {
+        method: "POST",
+        body: JSON.stringify(input),
+    });
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível mover a tarefa."),
+            response.status
+        );
+    }
+    return (await response.json()) as Task;
 }

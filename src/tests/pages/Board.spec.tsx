@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Board from "../../pages/Board.tsx";
 
 const BOARD_COLUMNS = [
@@ -15,11 +16,21 @@ const BOARD_COLUMNS = [
     "Rejeitado/Cancelado",
 ];
 
-describe('Board', () => {
-    it('renders all 10 flow columns, in order, with no cards', () => {
-        render(<Board/>);
+function renderBoard() {
+    const queryClient = new QueryClient();
+    return render(
+        <QueryClientProvider client={queryClient}>
+            <Board />
+        </QueryClientProvider>
+    );
+}
 
-        const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
-        expect(headings).toEqual(BOARD_COLUMNS);
+describe('Board', () => {
+    it('renders all 10 flow columns, in order, with no cards', async () => {
+        renderBoard();
+
+        const headings = await screen.findAllByRole("heading", { level: 2 });
+        expect(headings.map((h) => h.textContent)).toEqual(BOARD_COLUMNS);
+        expect(screen.queryAllByRole("article")).toHaveLength(0);
     });
 });

@@ -2,11 +2,13 @@ import '@testing-library/jest-dom';
 import * as React from 'react';
 import { vi, beforeAll, afterEach, afterAll } from 'vitest';
 import { server } from './src/tests/mocks/server';
+import { resetTasks } from './src/tests/mocks/handlers';
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterEach(() => {
     server.resetHandlers();
     localStorage.clear();
+    resetTasks();
 });
 afterAll(() => server.close());
 

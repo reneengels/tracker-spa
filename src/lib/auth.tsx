@@ -1,10 +1,8 @@
 import * as React from "react";
 import { createContext, useContext, useMemo, useState } from "react";
 import { decodeJwtClaims, type SessionRole } from "@/lib/jwt";
+import { clearTokens, getAccessToken, getRefreshToken, setTokens } from "@/lib/tokenStorage";
 import type { LoginResponse } from "@/lib/api";
-
-const ACCESS_TOKEN_KEY = "factory.accessToken";
-const REFRESH_TOKEN_KEY = "factory.refreshToken";
 
 interface Session {
     accessToken: string;
@@ -22,8 +20,8 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function readStoredSession(): Session | null {
-    const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
-    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+    const accessToken = getAccessToken();
+    const refreshToken = getRefreshToken();
     if (!accessToken || !refreshToken) {
         return null;
     }
@@ -35,8 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [session, setSessionState] = useState<Session | null>(() => readStoredSession());
 
     const setSession = (response: LoginResponse) => {
-        localStorage.setItem(ACCESS_TOKEN_KEY, response.access_token);
-        localStorage.setItem(REFRESH_TOKEN_KEY, response.refresh_token);
+        setTokens(response.access_token, response.refresh_token);
         const claims = decodeJwtClaims(response.access_token);
         setSessionState({
             accessToken: response.access_token,
@@ -46,8 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     const clearSession = () => {
-        localStorage.removeItem(ACCESS_TOKEN_KEY);
-        localStorage.removeItem(REFRESH_TOKEN_KEY);
+        clearTokens();
         setSessionState(null);
     };
 
