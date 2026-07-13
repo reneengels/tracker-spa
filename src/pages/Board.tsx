@@ -43,6 +43,23 @@ function CollaboratorAvatars({ collaborators }: { collaborators: Task["collabora
     );
 }
 
+function BlockedByBadge({ blockedBy }: { blockedBy: Task["blocked_by"] }) {
+    if (blockedBy.length === 0) {
+        return null;
+    }
+    const tooltip = `Bloqueada por: ${blockedBy.map((blocker) => blocker.task_key).join(", ")}`;
+    return (
+        <span
+            role="img"
+            aria-label={tooltip}
+            title={tooltip}
+            className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+        >
+            ⛔ {blockedBy.length}
+        </span>
+    );
+}
+
 function TaskCard({ task }: { task: Task }) {
     const { session } = useAuth();
     const queryClient = useQueryClient();
@@ -78,7 +95,10 @@ function TaskCard({ task }: { task: Task }) {
             onDragStart={handleDragStart}
             className="bg-white rounded-md border border-slate-200 shadow-sm p-2 mb-2 cursor-grab active:cursor-grabbing"
         >
-            <p className="text-xs font-mono text-slate-400">{task.task_key}</p>
+            <div className="flex items-start justify-between gap-2">
+                <p className="text-xs font-mono text-slate-400">{task.task_key}</p>
+                <BlockedByBadge blockedBy={task.blocked_by} />
+            </div>
             <p className="text-sm font-medium text-slate-800">{task.title}</p>
             <div className="mt-2 flex items-center justify-between">
                 <CollaboratorAvatars collaborators={task.collaborators} />

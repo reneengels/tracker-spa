@@ -125,3 +125,35 @@ describe("Board collaborators", () => {
         expect(within(card).getByRole("button", { name: "Pegar esta tarefa" })).toBeInTheDocument();
     });
 });
+
+describe("Board blocked-by indicator", () => {
+    it("shows a badge listing the blocking tasks when a task has blockers", async () => {
+        resetTasks([
+            makeTask({
+                id: "task-1",
+                task_key: "FAC-1",
+                title: "Tarefa bloqueada",
+                status: "TRIAGEM",
+                blocked_by: [
+                    { id: "task-2", task_key: "FAC-2", title: "Bloqueadora", status: "TRIAGEM" },
+                ],
+            }),
+        ]);
+        renderBoard();
+
+        const card = await screen.findByRole("article", { name: "Tarefa bloqueada" });
+
+        expect(within(card).getByRole("img", { name: "Bloqueada por: FAC-2" })).toBeInTheDocument();
+    });
+
+    it("shows no badge when a task has no blockers", async () => {
+        resetTasks([
+            makeTask({ id: "task-1", task_key: "FAC-1", title: "Tarefa livre", status: "TRIAGEM" }),
+        ]);
+        renderBoard();
+
+        const card = await screen.findByRole("article", { name: "Tarefa livre" });
+
+        expect(within(card).queryByRole("img", { name: /Bloqueada por/ })).not.toBeInTheDocument();
+    });
+});

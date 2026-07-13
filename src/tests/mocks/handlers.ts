@@ -41,6 +41,7 @@ export function makeTask(overrides: Partial<Task> = {}): Task {
         created_at: overrides.created_at ?? new Date(0).toISOString(),
         updated_at: overrides.updated_at ?? new Date(0).toISOString(),
         collaborators: overrides.collaborators ?? [],
+        blocked_by: overrides.blocked_by ?? [],
     };
 }
 
@@ -105,5 +106,36 @@ export const handlers = [
         }
         task.collaborators = task.collaborators.filter((c) => c.id !== MOCK_CURRENT_ACTOR.id);
         return HttpResponse.json({ success: true, message: "Left task", data: task });
+    }),
+
+    http.post("http://localhost:8000/tasks/:id/dependencies", async ({ params, request }) => {
+        const task = tasks.find((candidate) => candidate.id === params.id);
+        if (!task) {
+            return new HttpResponse(null, { status: 404 });
+        }
+        const body = (await request.json()) as { depends_on_task_id: string };
+        if (body.depends_on_task_id === task.id) {
+            return new HttpResponse(null, { status: 422 });
+        }
+        const blocker = tasks.find((candidate) => candidate.id === body.depends_on_task_id);
+        if (!blocker) {
+            return new HttpResponse(null, { status: 404 });
+        }
+        if (!task.blocked_by.some((b) => b.id === blocker.id)) {
+            task.blocked_by = [
+                ...task.blocked_by,
+                { id: blocker.id, task_key: blocker.task_key, title: blocker.title, status: blocker.status },
+            ];
+        }
+        return HttpResponse.json({ success: true, message: "Dependency added", data: task });
+    }),
+
+    http.delete("http://localhost:8000/tasks/:id/dependencies/:blockerId", ({ params }) => {
+        const task = tasks.find((candidate) => candidate.id === params.id);
+        if (!task) {
+            return new HttpResponse(null, { status: 404 });
+        }
+        task.blocked_by = task.blocked_by.filter((b) => b.id !== params.blockerId);
+        return HttpResponse.json({ success: true, message: "Dependency removed", data: task });
     }),
 ];

@@ -57,6 +57,14 @@ export interface Collaborator {
     type: "human" | "ai_agent";
 }
 
+/** Minimal reference to a blocking task — enough to render a chip (key, title, status). */
+export interface TaskLite {
+    id: string;
+    task_key: string;
+    title: string;
+    status: TaskStatus;
+}
+
 export interface Task {
     id: string;
     task_key: string;
@@ -78,6 +86,7 @@ export interface Task {
     created_at: string;
     updated_at: string;
     collaborators: Collaborator[];
+    blocked_by: TaskLite[];
 }
 
 export interface CreateTaskRequest {
@@ -88,6 +97,10 @@ export interface CreateTaskRequest {
 export interface TransitionTaskRequest {
     to_status: TaskStatus;
     reason?: string;
+}
+
+export interface AddDependencyRequest {
+    depends_on_task_id: string;
 }
 
 async function extractErrorMessage(response: Response, fallback: string): Promise<string> {
@@ -175,6 +188,42 @@ export async function leaveTask(taskId: string): Promise<Task> {
     if (!response.ok) {
         throw new ApiError(
             await extractErrorMessage(response, "Não foi possível sair da tarefa."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<Task>;
+    return envelope.data;
+}
+
+export async function addDependency(
+    taskId: string,
+    input: AddDependencyRequest
+): Promise<Task> {
+    const response = await authenticatedFetch(`/tasks/${taskId}/dependencies`, {
+        method: "POST",
+        body: JSON.stringify(input),
+    });
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível adicionar o bloqueio."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<Task>;
+    return envelope.data;
+}
+
+export async function removeDependency(
+    taskId: string,
+    dependsOnTaskId: string
+): Promise<Task> {
+    const response = await authenticatedFetch(
+        `/tasks/${taskId}/dependencies/${dependsOnTaskId}`,
+        { method: "DELETE" }
+    );
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível remover o bloqueio."),
             response.status
         );
     }
