@@ -1,5 +1,6 @@
 import { getAccessToken } from "@/lib/tokenStorage";
 import type { TaskStatus } from "@/lib/taskStatus";
+import type { SessionRole } from "@/lib/jwt";
 
 const API_BASE_URL: string =
     (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8000";
@@ -382,6 +383,223 @@ export async function getNextStatus(taskId: string): Promise<NextStatusResponse>
     }
     const envelope = (await response.json()) as SuccessEnvelope<NextStatusResponse>;
     return envelope.data;
+}
+
+// ---------------------------------------------------------------------------
+// Admin (ticket 12) — users/roles, labels, WIP limits, agent tokens. All
+// `/admin/*` endpoints require the Admin role server-side; `GET /labels` is
+// the one read that's open to any authenticated user (reused by list-view
+// filters).
+
+export interface AdminUser {
+    id: string;
+    name: string;
+    email: string | null;
+    type: "human" | "ai_agent";
+    role: SessionRole;
+    active: boolean;
+}
+
+export interface CreateUserRequest {
+    name: string;
+    type: "human" | "ai_agent";
+    role: SessionRole;
+    email?: string;
+    /** Required when `type` is "human"; omitted for "ai_agent". */
+    password?: string;
+}
+
+export interface UpdateUserRequest {
+    name?: string;
+    role?: SessionRole;
+    active?: boolean;
+}
+
+export async function listUsers(): Promise<AdminUser[]> {
+    const response = await authenticatedFetch("/admin/users");
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível carregar os usuários."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<AdminUser[]>;
+    return envelope.data;
+}
+
+export async function createUser(input: CreateUserRequest): Promise<AdminUser> {
+    const response = await authenticatedFetch("/admin/users", {
+        method: "POST",
+        body: JSON.stringify(input),
+    });
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível criar o usuário."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<AdminUser>;
+    return envelope.data;
+}
+
+export async function updateUser(id: string, input: UpdateUserRequest): Promise<AdminUser> {
+    const response = await authenticatedFetch(`/admin/users/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+    });
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível salvar o usuário."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<AdminUser>;
+    return envelope.data;
+}
+
+export interface CreateLabelRequest {
+    name: string;
+    dimension: string;
+    color: string;
+}
+
+export type UpdateLabelRequest = Partial<CreateLabelRequest>;
+
+export async function listLabels(): Promise<Label[]> {
+    const response = await authenticatedFetch("/labels");
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível carregar as labels."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<Label[]>;
+    return envelope.data;
+}
+
+export async function createLabel(input: CreateLabelRequest): Promise<Label> {
+    const response = await authenticatedFetch("/admin/labels", {
+        method: "POST",
+        body: JSON.stringify(input),
+    });
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível criar a label."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<Label>;
+    return envelope.data;
+}
+
+export async function updateLabel(id: string, input: UpdateLabelRequest): Promise<Label> {
+    const response = await authenticatedFetch(`/admin/labels/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+    });
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível salvar a label."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<Label>;
+    return envelope.data;
+}
+
+export interface WorkflowConfigEntry {
+    status: TaskStatus;
+    wip_limit: number | null;
+}
+
+export async function listWorkflowConfig(): Promise<WorkflowConfigEntry[]> {
+    const response = await authenticatedFetch("/admin/workflow-config");
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível carregar os limites de WIP."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<WorkflowConfigEntry[]>;
+    return envelope.data;
+}
+
+export async function updateWorkflowConfig(
+    status: TaskStatus,
+    wipLimit: number | null
+): Promise<WorkflowConfigEntry> {
+    const response = await authenticatedFetch(`/admin/workflow-config/${status}`, {
+        method: "PATCH",
+        body: JSON.stringify({ wip_limit: wipLimit }),
+    });
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível salvar o limite de WIP."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<WorkflowConfigEntry>;
+    return envelope.data;
+}
+
+export interface AgentTokenEntry {
+    id: string;
+    actor_id: string;
+    actor_name: string;
+    scope: string[];
+    active: boolean;
+    created_at: string;
+}
+
+export interface CreateAgentTokenRequest {
+    actor_id: string;
+    scope: string[];
+}
+
+export interface CreateAgentTokenResponse extends AgentTokenEntry {
+    /** The raw opaque token — shown ONLY in this response, never retrievable again. */
+    token: string;
+}
+
+export async function listAgentTokens(): Promise<AgentTokenEntry[]> {
+    const response = await authenticatedFetch("/admin/agent-tokens");
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível carregar os tokens de agente."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<AgentTokenEntry[]>;
+    return envelope.data;
+}
+
+export async function createAgentToken(
+    input: CreateAgentTokenRequest
+): Promise<CreateAgentTokenResponse> {
+    const response = await authenticatedFetch("/admin/agent-tokens", {
+        method: "POST",
+        body: JSON.stringify(input),
+    });
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível criar o token."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<CreateAgentTokenResponse>;
+    return envelope.data;
+}
+
+export async function revokeAgentToken(id: string): Promise<void> {
+    const response = await authenticatedFetch(`/admin/agent-tokens/${id}`, {
+        method: "DELETE",
+    });
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível revogar o token."),
+            response.status
+        );
+    }
 }
 
 export async function addComment(taskId: string, body: string): Promise<TaskComment> {

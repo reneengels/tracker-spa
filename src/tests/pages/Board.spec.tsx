@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
+import { AuthProvider } from "@/lib/auth";
 import Board from "../../pages/Board.tsx";
 
 const BOARD_COLUMNS = [
@@ -22,7 +23,9 @@ function renderBoard() {
     return render(
         <QueryClientProvider client={queryClient}>
             <MemoryRouter>
-                <Board />
+                <AuthProvider>
+                    <Board />
+                </AuthProvider>
             </MemoryRouter>
         </QueryClientProvider>
     );

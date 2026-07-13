@@ -1,6 +1,16 @@
 import { http, HttpResponse, ws } from "msw";
-import type { Label, StatusTransitionEntry, Task, TaskComment, TaskDetail } from "@/lib/api";
+import type {
+    AdminUser,
+    AgentTokenEntry,
+    Label,
+    StatusTransitionEntry,
+    Task,
+    TaskComment,
+    TaskDetail,
+    WorkflowConfigEntry,
+} from "@/lib/api";
 import type { TaskStatus } from "@/lib/taskStatus";
+import { BOARD_COLUMNS } from "@/lib/taskStatus";
 
 const PRIORITY_ORDER: Record<Task["priority"], number> = {
     URGENT: 0,
@@ -16,6 +26,12 @@ export const VALID_ACCESS_TOKEN =
 
 /** The actor id encoded in `VALID_ACCESS_TOKEN`'s `sub` claim — join/leave mocks act as this user. */
 export const MOCK_CURRENT_ACTOR = { id: "po-user", name: "PO User", type: "human" as const };
+
+/** A second mock JWT with an Admin role claim, for ticket 12's RBAC tests. */
+export const ADMIN_ACCESS_TOKEN =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." +
+    "eyJzdWIiOiJhZG1pbi11c2VyIiwicm9sZSI6IkFkbWluIn0." +
+    "test-signature";
 
 /** Mirrors TransitionService's flow graph (tracker-api) for mock validation. */
 const TRANSITION_GRAPH: Record<TaskStatus, TaskStatus[]> = {
@@ -49,6 +65,34 @@ let commentsByTask: Record<string, TaskComment[]> = {};
 let transitionsByTask: Record<string, StatusTransitionEntry[]> = {};
 let nextCommentId = 1;
 let nextTransitionId = 1;
+
+let users: AdminUser[] = [
+    { id: "po-user", name: "PO User", email: null, type: "human", role: "PO", active: true },
+    { id: "admin-user", name: "Admin User", email: null, type: "human", role: "Admin", active: true },
+];
+let nextUserId = 1;
+let mockLabels: Label[] = [];
+let nextLabelId = 1;
+let workflowConfig: WorkflowConfigEntry[] = BOARD_COLUMNS.map(({ status }) => ({
+    status,
+    wip_limit: null,
+}));
+let agentTokens: AgentTokenEntry[] = [];
+let nextAgentTokenId = 1;
+
+/** Resets the in-memory admin mock stores; call between tests to avoid leakage. */
+export function resetAdminStores(): void {
+    users = [
+        { id: "po-user", name: "PO User", email: null, type: "human", role: "PO", active: true },
+        { id: "admin-user", name: "Admin User", email: null, type: "human", role: "Admin", active: true },
+    ];
+    nextUserId = 1;
+    mockLabels = [];
+    nextLabelId = 1;
+    workflowConfig = BOARD_COLUMNS.map(({ status }) => ({ status, wip_limit: null }));
+    agentTokens = [];
+    nextAgentTokenId = 1;
+}
 
 /** Resets the in-memory mock task store; call between tests to avoid leakage. */
 export function resetTasks(seed: Task[] = []): void {
@@ -354,6 +398,147 @@ export const handlers = [
         }
         task.blocked_by = task.blocked_by.filter((b) => b.id !== params.blockerId);
         return HttpResponse.json({ success: true, message: "Dependency removed", data: task });
+    }),
+
+    // --- Admin (ticket 12) ---
+
+    http.get("http://localhost:8000/admin/users", ({ request }) => {
+        if (!request.headers.get("Authorization")?.includes(ADMIN_ACCESS_TOKEN)) {
+            return new HttpResponse(null, { status: 403 });
+        }
+        return HttpResponse.json({ success: true, message: "OK", data: users });
+    }),
+
+    http.post("http://localhost:8000/admin/users", async ({ request }) => {
+        if (!request.headers.get("Authorization")?.includes(ADMIN_ACCESS_TOKEN)) {
+            return new HttpResponse(null, { status: 403 });
+        }
+        const body = (await request.json()) as Partial<AdminUser> & { password?: string };
+        const user: AdminUser = {
+            id: `user-${nextUserId++}`,
+            name: body.name ?? "",
+            email: body.email ?? null,
+            type: body.type ?? "human",
+            role: body.role ?? "Dev",
+            active: true,
+        };
+        users = [...users, user];
+        return HttpResponse.json(
+            { success: true, message: "User created", data: user },
+            { status: 201 }
+        );
+    }),
+
+    http.patch("http://localhost:8000/admin/users/:id", async ({ params, request }) => {
+        if (!request.headers.get("Authorization")?.includes(ADMIN_ACCESS_TOKEN)) {
+            return new HttpResponse(null, { status: 403 });
+        }
+        const user = users.find((candidate) => candidate.id === params.id);
+        if (!user) {
+            return new HttpResponse(null, { status: 404 });
+        }
+        const body = (await request.json()) as Partial<AdminUser>;
+        Object.assign(user, body);
+        return HttpResponse.json({ success: true, message: "User updated", data: user });
+    }),
+
+    http.get("http://localhost:8000/labels", () => {
+        return HttpResponse.json({ success: true, message: "OK", data: mockLabels });
+    }),
+
+    http.post("http://localhost:8000/admin/labels", async ({ request }) => {
+        if (!request.headers.get("Authorization")?.includes(ADMIN_ACCESS_TOKEN)) {
+            return new HttpResponse(null, { status: 403 });
+        }
+        const body = (await request.json()) as Partial<Label>;
+        const label: Label = {
+            id: `label-${nextLabelId++}`,
+            name: body.name ?? "",
+            dimension: body.dimension ?? "",
+            color: body.color ?? "#000000",
+        };
+        mockLabels = [...mockLabels, label];
+        return HttpResponse.json(
+            { success: true, message: "Label created", data: label },
+            { status: 201 }
+        );
+    }),
+
+    http.patch("http://localhost:8000/admin/labels/:id", async ({ params, request }) => {
+        if (!request.headers.get("Authorization")?.includes(ADMIN_ACCESS_TOKEN)) {
+            return new HttpResponse(null, { status: 403 });
+        }
+        const label = mockLabels.find((candidate) => candidate.id === params.id);
+        if (!label) {
+            return new HttpResponse(null, { status: 404 });
+        }
+        const body = (await request.json()) as Partial<Label>;
+        Object.assign(label, body);
+        return HttpResponse.json({ success: true, message: "Label updated", data: label });
+    }),
+
+    http.get("http://localhost:8000/admin/workflow-config", ({ request }) => {
+        if (!request.headers.get("Authorization")?.includes(ADMIN_ACCESS_TOKEN)) {
+            return new HttpResponse(null, { status: 403 });
+        }
+        return HttpResponse.json({ success: true, message: "OK", data: workflowConfig });
+    }),
+
+    http.patch("http://localhost:8000/admin/workflow-config/:status", async ({ params, request }) => {
+        if (!request.headers.get("Authorization")?.includes(ADMIN_ACCESS_TOKEN)) {
+            return new HttpResponse(null, { status: 403 });
+        }
+        const entry = workflowConfig.find((candidate) => candidate.status === params.status);
+        if (!entry) {
+            return new HttpResponse(null, { status: 404 });
+        }
+        const body = (await request.json()) as { wip_limit: number | null };
+        entry.wip_limit = body.wip_limit;
+        return HttpResponse.json({ success: true, message: "Workflow config updated", data: entry });
+    }),
+
+    http.get("http://localhost:8000/admin/agent-tokens", ({ request }) => {
+        if (!request.headers.get("Authorization")?.includes(ADMIN_ACCESS_TOKEN)) {
+            return new HttpResponse(null, { status: 403 });
+        }
+        return HttpResponse.json({ success: true, message: "OK", data: agentTokens });
+    }),
+
+    http.post("http://localhost:8000/admin/agent-tokens", async ({ request }) => {
+        if (!request.headers.get("Authorization")?.includes(ADMIN_ACCESS_TOKEN)) {
+            return new HttpResponse(null, { status: 403 });
+        }
+        const body = (await request.json()) as { actor_id: string; scope: string[] };
+        const actor = users.find((candidate) => candidate.id === body.actor_id);
+        const entry: AgentTokenEntry = {
+            id: `token-${nextAgentTokenId++}`,
+            actor_id: body.actor_id,
+            actor_name: actor?.name ?? "Unknown",
+            scope: body.scope,
+            active: true,
+            created_at: new Date(0).toISOString(),
+        };
+        agentTokens = [...agentTokens, entry];
+        return HttpResponse.json(
+            {
+                success: true,
+                message: "Token created",
+                data: { ...entry, token: `raw-secret-${entry.id}` },
+            },
+            { status: 201 }
+        );
+    }),
+
+    http.delete("http://localhost:8000/admin/agent-tokens/:id", ({ params, request }) => {
+        if (!request.headers.get("Authorization")?.includes(ADMIN_ACCESS_TOKEN)) {
+            return new HttpResponse(null, { status: 403 });
+        }
+        const entry = agentTokens.find((candidate) => candidate.id === params.id);
+        if (!entry) {
+            return new HttpResponse(null, { status: 404 });
+        }
+        entry.active = false;
+        return HttpResponse.json({ success: true, message: "Token revoked", data: entry });
     }),
 
     // Accepts the realtime WebSocket connection so tests that render the full app

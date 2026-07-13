@@ -151,6 +151,7 @@ function NewTaskForm({ onClose }: { onClose: () => void }) {
 export default function Board() {
     const [isCreating, setIsCreating] = useState(false);
     const queryClient = useQueryClient();
+    const { session } = useAuth();
 
     const { data: tasks = [] } = useQuery({
         queryKey: TASKS_QUERY_KEY,
@@ -206,6 +207,11 @@ export default function Board() {
                     <Link to="/list" className="text-sm text-sky-600 hover:underline">
                         Ver Lista
                     </Link>
+                    {session?.role === "Admin" && (
+                        <Link to="/admin" className="text-sm text-sky-600 hover:underline">
+                            Admin
+                        </Link>
+                    )}
                     <Button onClick={() => setIsCreating(true)}>Nova tarefa</Button>
                 </div>
             </div>
