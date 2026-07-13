@@ -6,7 +6,7 @@ const API_BASE_URL: string =
     (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8000";
 
 export interface LoginRequest {
-    username: string;
+    email: string;
     password: string;
 }
 
@@ -14,6 +14,8 @@ export interface LoginResponse {
     access_token: string;
     refresh_token: string;
     token_type: string;
+    role: SessionRole;
+    expires_in: number;
 }
 
 /**
@@ -45,7 +47,7 @@ export async function login(credentials: LoginRequest): Promise<LoginResponse> {
     });
 
     if (!response.ok) {
-        throw new ApiError("Invalid username or password", response.status);
+        throw new ApiError("Invalid email or password", response.status);
     }
 
     const envelope = (await response.json()) as SuccessEnvelope<LoginResponse>;

@@ -163,9 +163,9 @@ export const PROJETO_LABEL: Label = {
 
 export const handlers = [
     http.post("http://localhost:8000/auth/login", async ({ request }) => {
-        const body = (await request.json()) as { username: string; password: string };
+        const body = (await request.json()) as { email: string; password: string };
 
-        if (body.username === "po" && body.password === "correct-horse") {
+        if (body.email === "po@factory.dev" && body.password === "correct-horse") {
             return HttpResponse.json({
                 success: true,
                 message: "Login successful",
@@ -173,6 +173,8 @@ export const handlers = [
                     access_token: VALID_ACCESS_TOKEN,
                     refresh_token: "refresh-token-value",
                     token_type: "bearer",
+                    role: "PO",
+                    expires_in: 1800,
                 },
             });
         }

@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button.tsx";
 
 export default function Login() {
-    const [username, setUsername] = useState("");
+    const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const { setSession } = useAuth();
     const navigate = useNavigate();
@@ -21,7 +21,7 @@ export default function Login() {
 
     const handleSubmit = (event: React.FormEvent) => {
         event.preventDefault();
-        mutation.mutate({ username, password });
+        mutation.mutate({ email, password });
     };
 
     return (
@@ -33,16 +33,16 @@ export default function Login() {
                 <h1 className="text-2xl font-bold text-slate-800">Factory</h1>
 
                 <div className="space-y-1">
-                    <label htmlFor="username" className="text-sm font-medium text-slate-700">
-                        Usuário
+                    <label htmlFor="email" className="text-sm font-medium text-slate-700">
+                        E-mail
                     </label>
                     <input
-                        id="username"
-                        name="username"
-                        type="text"
+                        id="email"
+                        name="email"
+                        type="email"
                         autoComplete="username"
-                        value={username}
-                        onChange={(event) => setUsername(event.target.value)}
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
                         className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
                         required
                     />
@@ -66,7 +66,7 @@ export default function Login() {
 
                 {mutation.isError && (
                     <p role="alert" className="text-sm text-red-600">
-                        Usuário ou senha inválidos.
+                        E-mail ou senha inválidos.
                     </p>
                 )}
 

@@ -37,7 +37,7 @@ describe("Login flow", () => {
         const user = userEvent.setup();
         renderApp();
 
-        await user.type(screen.getByLabelText(/usuário/i), "po");
+        await user.type(screen.getByLabelText(/e-mail/i), "po@factory.dev");
         await user.type(screen.getByLabelText(/senha/i), "correct-horse");
         await user.click(screen.getByRole("button", { name: /entrar/i }));
 
@@ -54,7 +54,7 @@ describe("Login flow", () => {
         const user = userEvent.setup();
         renderApp();
 
-        await user.type(screen.getByLabelText(/usuário/i), "po");
+        await user.type(screen.getByLabelText(/e-mail/i), "po@factory.dev");
         await user.type(screen.getByLabelText(/senha/i), "wrong-password");
         await user.click(screen.getByRole("button", { name: /entrar/i }));
 
