@@ -169,7 +169,10 @@ export const handlers = [
             created_at: new Date(0).toISOString(),
         };
         commentsByTask[task.id] = [...(commentsByTask[task.id] ?? []), comment];
-        return HttpResponse.json({ success: true, message: "Comment added", data: toDetail(task) });
+        return HttpResponse.json(
+            { success: true, message: "Comment added", data: comment },
+            { status: 201 }
+        );
     }),
 
     http.post("http://localhost:8000/tasks/:id/transitions", async ({ params, request }) => {

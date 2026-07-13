@@ -131,7 +131,7 @@ export interface CodeArtifact {
     kind: "PR" | "BRANCH" | "COMMIT";
     url: string;
     label: string;
-    created_by: string;
+    created_by: ActorRef;
     created_at: string;
 }
 
@@ -329,7 +329,7 @@ export async function getNextStatus(taskId: string): Promise<NextStatusResponse>
     return envelope.data;
 }
 
-export async function addComment(taskId: string, body: string): Promise<TaskDetail> {
+export async function addComment(taskId: string, body: string): Promise<TaskComment> {
     const response = await authenticatedFetch(`/tasks/${taskId}/comments`, {
         method: "POST",
         body: JSON.stringify({ body }),
@@ -340,6 +340,6 @@ export async function addComment(taskId: string, body: string): Promise<TaskDeta
             response.status
         );
     }
-    const envelope = (await response.json()) as SuccessEnvelope<TaskDetail>;
+    const envelope = (await response.json()) as SuccessEnvelope<TaskComment>;
     return envelope.data;
 }
