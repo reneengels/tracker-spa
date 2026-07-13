@@ -1,4 +1,4 @@
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse, ws } from "msw";
 import type { StatusTransitionEntry, Task, TaskComment, TaskDetail } from "@/lib/api";
 import type { TaskStatus } from "@/lib/taskStatus";
 
@@ -269,5 +269,13 @@ export const handlers = [
         }
         task.blocked_by = task.blocked_by.filter((b) => b.id !== params.blockerId);
         return HttpResponse.json({ success: true, message: "Dependency removed", data: task });
+    }),
+
+    // Accepts the realtime WebSocket connection so tests that render the full app
+    // (and therefore trigger `connectRealtime` after login) don't log an "unhandled
+    // connection" error. No messages are sent here — `Realtime.spec.tsx` simulates
+    // incoming events via its own fake socket, independent of this mock.
+    ws.link("ws://localhost:8000/ws").addEventListener("connection", () => {
+        /* accept and do nothing */
     }),
 ];
