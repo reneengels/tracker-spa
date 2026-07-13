@@ -9,26 +9,10 @@ import { BOARD_COLUMNS, type TaskStatus } from "@/lib/taskStatus";
 import { Button } from "@/components/ui/button.tsx";
 import { useAuth } from "@/lib/auth";
 import { CollaboratorAvatars } from "@/components/CollaboratorAvatars";
+import { BlockedByBadge } from "@/components/BlockedByBadge";
 
 const TASKS_QUERY_KEY = ["tasks"] as const;
 const DRAG_DATA_FORMAT = "application/x-factory-task-id";
-
-function BlockedByBadge({ blockedBy }: { blockedBy: Task["blocked_by"] }) {
-    if (blockedBy.length === 0) {
-        return null;
-    }
-    const tooltip = `Bloqueada por: ${blockedBy.map((blocker) => blocker.task_key).join(", ")}`;
-    return (
-        <span
-            role="img"
-            aria-label={tooltip}
-            title={tooltip}
-            className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
-        >
-            ⛔ {blockedBy.length}
-        </span>
-    );
-}
 
 function TaskCard({ task }: { task: Task }) {
     const { session } = useAuth();
@@ -218,7 +202,12 @@ export default function Board() {
         <div className="min-h-screen p-6 bg-slate-50">
             <div className="flex items-center justify-between mb-4">
                 <h1 className="text-xl font-bold text-slate-800">Board Kanban</h1>
-                <Button onClick={() => setIsCreating(true)}>Nova tarefa</Button>
+                <div className="flex items-center gap-4">
+                    <Link to="/list" className="text-sm text-sky-600 hover:underline">
+                        Ver Lista
+                    </Link>
+                    <Button onClick={() => setIsCreating(true)}>Nova tarefa</Button>
+                </div>
             </div>
 
             <div className="flex gap-4 overflow-x-auto pb-4">

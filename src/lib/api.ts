@@ -65,6 +65,13 @@ export interface TaskLite {
     status: TaskStatus;
 }
 
+export interface Label {
+    id: string;
+    name: string;
+    dimension: string;
+    color: string;
+}
+
 export interface Task {
     id: string;
     task_key: string;
@@ -87,6 +94,7 @@ export interface Task {
     updated_at: string;
     collaborators: Collaborator[];
     blocked_by: TaskLite[];
+    labels: Label[];
 }
 
 export interface CreateTaskRequest {
@@ -162,6 +170,23 @@ export interface NextStatusResponse {
     valid_transitions: TaskStatus[];
 }
 
+export interface TaskSearchParams {
+    collaboratorIds?: string[];
+    priorities?: Task["priority"][];
+    type?: Task["type"];
+    labelIds?: string[];
+    projectEpicoLabelId?: string;
+    tags?: string[];
+    q?: string;
+    cursor?: string;
+    limit?: number;
+}
+
+export interface TaskSearchResult {
+    tasks: Task[];
+    next_cursor: string | null;
+}
+
 async function extractErrorMessage(response: Response, fallback: string): Promise<string> {
     try {
         const body = (await response.json()) as { message?: string };
@@ -179,6 +204,32 @@ async function authenticatedFetch(path: string, init: RequestInit = {}): Promise
         headers.set("Authorization", `Bearer ${accessToken}`);
     }
     return fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+}
+
+function buildSearchQuery(params: TaskSearchParams): string {
+    const query = new URLSearchParams();
+    for (const id of params.collaboratorIds ?? []) query.append("collaborator_id", id);
+    for (const priority of params.priorities ?? []) query.append("priority", priority);
+    if (params.type) query.set("type", params.type);
+    for (const id of params.labelIds ?? []) query.append("label_id", id);
+    if (params.projectEpicoLabelId) query.set("project_epico_label_id", params.projectEpicoLabelId);
+    for (const tag of params.tags ?? []) query.append("tags", tag);
+    if (params.q) query.set("q", params.q);
+    if (params.cursor) query.set("cursor", params.cursor);
+    query.set("limit", String(params.limit ?? 30));
+    return query.toString();
+}
+
+export async function searchTasks(params: TaskSearchParams): Promise<TaskSearchResult> {
+    const response = await authenticatedFetch(`/tasks/search?${buildSearchQuery(params)}`);
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível buscar as tarefas."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<TaskSearchResult>;
+    return envelope.data;
 }
 
 export async function listTasks(): Promise<Task[]> {

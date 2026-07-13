@@ -1,6 +1,13 @@
 import { http, HttpResponse, ws } from "msw";
-import type { StatusTransitionEntry, Task, TaskComment, TaskDetail } from "@/lib/api";
+import type { Label, StatusTransitionEntry, Task, TaskComment, TaskDetail } from "@/lib/api";
 import type { TaskStatus } from "@/lib/taskStatus";
+
+const PRIORITY_ORDER: Record<Task["priority"], number> = {
+    URGENT: 0,
+    HIGH: 1,
+    NORMAL: 2,
+    LOW: 3,
+};
 
 export const VALID_ACCESS_TOKEN =
     "eyJhbGciOiAiSFMyNTYiLCAidHlwIjogIkpXVCJ9." +
@@ -86,8 +93,16 @@ export function makeTask(overrides: Partial<Task> = {}): Task {
         updated_at: overrides.updated_at ?? new Date(0).toISOString(),
         collaborators: overrides.collaborators ?? [],
         blocked_by: overrides.blocked_by ?? [],
+        labels: overrides.labels ?? [],
     };
 }
+
+export const PROJETO_LABEL: Label = {
+    id: "label-projeto-factory",
+    name: "Factory",
+    dimension: "Projeto/Epico",
+    color: "#0ea5e9",
+};
 
 export const handlers = [
     http.post("http://localhost:8000/auth/login", async ({ request }) => {
@@ -110,6 +125,65 @@ export const handlers = [
 
     http.get("http://localhost:8000/tasks", () => {
         return HttpResponse.json({ success: true, message: "OK", data: tasks });
+    }),
+
+    http.get("http://localhost:8000/tasks/search", ({ request }) => {
+        const url = new URL(request.url);
+        const collaboratorIds = url.searchParams.getAll("collaborator_id");
+        const priorities = url.searchParams.getAll("priority");
+        const type = url.searchParams.get("type");
+        const labelIds = url.searchParams.getAll("label_id");
+        const projectEpicoId = url.searchParams.get("project_epico_label_id");
+        const tags = url.searchParams.getAll("tags");
+        const q = url.searchParams.get("q")?.toLowerCase() ?? null;
+        const cursor = url.searchParams.get("cursor");
+        const limit = Number(url.searchParams.get("limit") ?? "30");
+
+        let filtered = tasks.filter((task) => {
+            if (collaboratorIds.length > 0) {
+                const matchesUnassigned =
+                    collaboratorIds.includes("unassigned") && task.collaborators.length === 0;
+                const matchesActor = task.collaborators.some((c) => collaboratorIds.includes(c.id));
+                if (!matchesUnassigned && !matchesActor) return false;
+            }
+            if (priorities.length > 0 && !priorities.includes(task.priority)) return false;
+            if (type && task.type !== type) return false;
+            if (labelIds.length > 0 && !task.labels.some((l) => labelIds.includes(l.id))) return false;
+            if (projectEpicoId && !task.labels.some((l) => l.id === projectEpicoId)) return false;
+            if (tags.length > 0 && !(task.tags ?? []).some((tag) => tags.includes(tag))) return false;
+            if (
+                q &&
+                !task.title.toLowerCase().includes(q) &&
+                !task.description.toLowerCase().includes(q) &&
+                !task.task_key.toLowerCase().includes(q)
+            ) {
+                return false;
+            }
+            return true;
+        });
+
+        // Flat, globally priority-ordered stream — client groups by status itself.
+        filtered = [...filtered].sort(
+            (a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority] || a.id.localeCompare(b.id)
+        );
+
+        // Keyset pagination by id (found fresh on every request, not by offset) — an
+        // insert anywhere in `tasks` between two page fetches never duplicates or
+        // skips items already returned, since the cursor is a stable identity, not a position.
+        let startIndex = 0;
+        if (cursor) {
+            const idx = filtered.findIndex((task) => task.id === cursor);
+            startIndex = idx === -1 ? 0 : idx + 1;
+        }
+        const page = filtered.slice(startIndex, startIndex + limit);
+        const nextCursor =
+            startIndex + limit < filtered.length ? (page[page.length - 1]?.id ?? null) : null;
+
+        return HttpResponse.json({
+            success: true,
+            message: "OK",
+            data: { tasks: page, next_cursor: nextCursor },
+        });
     }),
 
     http.get("http://localhost:8000/tasks/:id", ({ params }) => {
