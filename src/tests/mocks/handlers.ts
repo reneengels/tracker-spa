@@ -3,6 +3,7 @@ import type {
     AdminUser,
     AgentTokenEntry,
     Label,
+    NotificationConfig,
     StatusTransitionEntry,
     Task,
     TaskComment,
@@ -79,6 +80,12 @@ let workflowConfig: WorkflowConfigEntry[] = BOARD_COLUMNS.map(({ status }) => ({
 }));
 let agentTokens: AgentTokenEntry[] = [];
 let nextAgentTokenId = 1;
+let notificationConfig: NotificationConfig = {
+    webhook_url: null,
+    webhook_enabled: false,
+    queue_low_threshold: null,
+    network_egress_enabled: true,
+};
 
 /** Resets the in-memory admin mock stores; call between tests to avoid leakage. */
 export function resetAdminStores(): void {
@@ -92,6 +99,12 @@ export function resetAdminStores(): void {
     workflowConfig = BOARD_COLUMNS.map(({ status }) => ({ status, wip_limit: null }));
     agentTokens = [];
     nextAgentTokenId = 1;
+    notificationConfig = {
+        webhook_url: null,
+        webhook_enabled: false,
+        queue_low_threshold: null,
+        network_egress_enabled: true,
+    };
 }
 
 /** Resets the in-memory mock task store; call between tests to avoid leakage. */
@@ -539,6 +552,26 @@ export const handlers = [
         }
         entry.active = false;
         return HttpResponse.json({ success: true, message: "Token revoked", data: entry });
+    }),
+
+    http.get("http://localhost:8000/admin/notification-config", ({ request }) => {
+        if (!request.headers.get("Authorization")?.includes(ADMIN_ACCESS_TOKEN)) {
+            return new HttpResponse(null, { status: 403 });
+        }
+        return HttpResponse.json({ success: true, message: "OK", data: notificationConfig });
+    }),
+
+    http.patch("http://localhost:8000/admin/notification-config", async ({ request }) => {
+        if (!request.headers.get("Authorization")?.includes(ADMIN_ACCESS_TOKEN)) {
+            return new HttpResponse(null, { status: 403 });
+        }
+        const body = (await request.json()) as Partial<NotificationConfig>;
+        Object.assign(notificationConfig, body);
+        return HttpResponse.json({
+            success: true,
+            message: "Notification config updated",
+            data: notificationConfig,
+        });
     }),
 
     // Accepts the realtime WebSocket connection so tests that render the full app

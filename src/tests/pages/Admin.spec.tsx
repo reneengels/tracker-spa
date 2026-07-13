@@ -11,6 +11,7 @@ import AdminUsers from "@/pages/admin/AdminUsers";
 import AdminLabels from "@/pages/admin/AdminLabels";
 import AdminWipLimits from "@/pages/admin/AdminWipLimits";
 import AdminAgentTokens from "@/pages/admin/AdminAgentTokens";
+import AdminNotifications from "@/pages/admin/AdminNotifications";
 
 function renderAdminPage(page: React.ReactNode) {
     const queryClient = new QueryClient();
@@ -112,6 +113,53 @@ describe("Admin screens", () => {
         await waitFor(() => {
             expect(screen.queryByRole("button", { name: "Revogar" })).not.toBeInTheDocument();
         });
+    });
+
+    it("Notificações: edita a configuração de webhook e persiste", async () => {
+        setTokens(ADMIN_ACCESS_TOKEN, "refresh-token-value");
+        renderAdminPage(<AdminNotifications />);
+        const user = userEvent.setup();
+
+        const urlInput = await screen.findByLabelText("URL do webhook");
+        await user.type(urlInput, "https://hooks.slack.com/services/T00/B00/xyz");
+        await user.click(screen.getByLabelText("Notificações Slack/Teams ativadas"));
+        await user.type(screen.getByLabelText("Limite da Fila para notificar reabastecimento"), "5");
+        await user.click(screen.getByLabelText("Permitir saída de rede (desligue para ambientes air-gapped)"));
+
+        await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+        await waitFor(async () => {
+            const refreshedUrl = await screen.findByLabelText("URL do webhook");
+            expect((refreshedUrl as HTMLInputElement).value).toBe(
+                "https://hooks.slack.com/services/T00/B00/xyz"
+            );
+            expect(
+                (screen.getByLabelText("Notificações Slack/Teams ativadas") as HTMLInputElement).checked
+            ).toBe(true);
+            expect(
+                (screen.getByLabelText("Limite da Fila para notificar reabastecimento") as HTMLInputElement)
+                    .value
+            ).toBe("5");
+            expect(
+                (
+                    screen.getByLabelText(
+                        "Permitir saída de rede (desligue para ambientes air-gapped)"
+                    ) as HTMLInputElement
+                ).checked
+            ).toBe(false);
+        });
+    });
+
+    it("Notificações: usuário não-Admin não consegue acessar a tela", async () => {
+        setTokens(VALID_ACCESS_TOKEN, "refresh-token-value");
+        renderAdminPage(
+            <RequireRole role="Admin">
+                <AdminNotifications />
+            </RequireRole>
+        );
+
+        await screen.findByRole("alert");
+        expect(screen.queryByLabelText("URL do webhook")).not.toBeInTheDocument();
     });
 
     it("RequireRole bloqueia um usuário não-Admin", async () => {

@@ -17,6 +17,9 @@ export default function AdminHome() {
                 <Link to="/admin/agent-tokens" className="text-sky-600 hover:underline">
                     Tokens de Agente
                 </Link>
+                <Link to="/admin/notifications" className="text-sky-600 hover:underline">
+                    Notificações
+                </Link>
             </nav>
             <Link to="/board" className="text-sm text-slate-500 hover:underline">
                 Voltar ao Board

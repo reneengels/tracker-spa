@@ -602,6 +602,42 @@ export async function revokeAgentToken(id: string): Promise<void> {
     }
 }
 
+export interface NotificationConfig {
+    webhook_url: string | null;
+    webhook_enabled: boolean;
+    queue_low_threshold: number | null;
+    network_egress_enabled: boolean;
+}
+
+export async function getNotificationConfig(): Promise<NotificationConfig> {
+    const response = await authenticatedFetch("/admin/notification-config");
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível carregar a configuração de notificações."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<NotificationConfig>;
+    return envelope.data;
+}
+
+export async function updateNotificationConfig(
+    partial: Partial<NotificationConfig>
+): Promise<NotificationConfig> {
+    const response = await authenticatedFetch("/admin/notification-config", {
+        method: "PATCH",
+        body: JSON.stringify(partial),
+    });
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível salvar a configuração de notificações."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<NotificationConfig>;
+    return envelope.data;
+}
+
 export async function addComment(taskId: string, body: string): Promise<TaskComment> {
     const response = await authenticatedFetch(`/tasks/${taskId}/comments`, {
         method: "POST",

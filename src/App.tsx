@@ -13,6 +13,7 @@ import AdminUsers from "./pages/admin/AdminUsers.tsx";
 import AdminLabels from "./pages/admin/AdminLabels.tsx";
 import AdminWipLimits from "./pages/admin/AdminWipLimits.tsx";
 import AdminAgentTokens from "./pages/admin/AdminAgentTokens.tsx";
+import AdminNotifications from "./pages/admin/AdminNotifications.tsx";
 import RequireAuth from "./components/RequireAuth.tsx";
 import RequireRole from "./components/RequireRole.tsx";
 import {useAuth} from "@/lib/auth";
@@ -49,6 +50,7 @@ export default function App() {
                 <Route path="/admin/labels" element={<RequireRole role="Admin"><AdminLabels/></RequireRole>}/>
                 <Route path="/admin/wip-limits" element={<RequireRole role="Admin"><AdminWipLimits/></RequireRole>}/>
                 <Route path="/admin/agent-tokens" element={<RequireRole role="Admin"><AdminAgentTokens/></RequireRole>}/>
+                <Route path="/admin/notifications" element={<RequireRole role="Admin"><AdminNotifications/></RequireRole>}/>
             </Routes>
         </>
     )
