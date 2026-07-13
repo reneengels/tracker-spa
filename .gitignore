@@ -6,6 +6,12 @@ dist/
 build/
 .vite/
 
+# Playwright (ticket 15 E2E suite)
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
 # Environment
 .env
 .env.local
