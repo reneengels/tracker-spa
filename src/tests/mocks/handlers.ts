@@ -138,6 +138,7 @@ export const handlers = [
         const q = url.searchParams.get("q")?.toLowerCase() ?? null;
         const cursor = url.searchParams.get("cursor");
         const limit = Number(url.searchParams.get("limit") ?? "30");
+        const myQueue = url.searchParams.get("my_queue") === "true";
 
         let filtered = tasks.filter((task) => {
             if (collaboratorIds.length > 0) {
@@ -158,6 +159,16 @@ export const handlers = [
                 !task.task_key.toLowerCase().includes(q)
             ) {
                 return false;
+            }
+            if (myQueue) {
+                // Mirrors the backend's role→status relevance rule (ticket 11): the mock
+                // current actor's role is "PO" (VALID_ACCESS_TOKEN's role claim), compatible
+                // with TRIAGEM. Combined with "collaborator OR unassigned" (ticket 09/04 model).
+                const roleCompatibleStatuses: Task["status"][] = ["TRIAGEM"];
+                if (!roleCompatibleStatuses.includes(task.status)) return false;
+                const isCollaborator = task.collaborators.some((c) => c.id === MOCK_CURRENT_ACTOR.id);
+                const isUnassigned = task.collaborators.length === 0;
+                if (!isCollaborator && !isUnassigned) return false;
             }
             return true;
         });

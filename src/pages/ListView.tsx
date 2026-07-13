@@ -1,10 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { searchTasks, type Label, type Task } from "@/lib/api";
-import { BOARD_COLUMNS, type TaskStatus } from "@/lib/taskStatus";
+import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
+import {
+    ApiError,
+    getNextStatus,
+    searchTasks,
+    transitionTask,
+    type Label,
+    type Task,
+} from "@/lib/api";
+import { BOARD_COLUMNS, statusLabel, type TaskStatus } from "@/lib/taskStatus";
 import { CollaboratorAvatars } from "@/components/CollaboratorAvatars";
 import { BlockedByBadge } from "@/components/BlockedByBadge";
+
+/** Matches TanStack Query's default prefix matching for invalidateQueries — any
+ * ListView instance, regardless of its specific filter selection, refetches. */
+const SEARCH_QUERY_PREFIX = ["tasks", "search"] as const;
 
 const PRIORITIES: Task["priority"][] = ["URGENT", "HIGH", "NORMAL", "LOW"];
 const TYPES: Task["type"][] = ["FEATURE", "AJUSTE", "SUGESTAO", "REWORK"];
@@ -59,12 +71,90 @@ function distinctFacets(tasks: Task[]) {
     };
 }
 
-export default function ListView() {
+/**
+ * Compact per-row status control — same status-selector + suggested-next-shortcut
+ * mechanism as the Task Detail page's StatusChanger, without opening the Detail.
+ *
+ * The "next status" suggestion is fetched lazily (only once this row's control has
+ * been focused), not eagerly for every visible row — a page can show 20+ rows, and
+ * firing a `GET /tasks/{id}/next-status` per row on render doesn't scale (it's also
+ * what caused a real slowdown/timeout under test load before this was made lazy).
+ */
+function InlineStatusChanger({ task }: { task: Task }) {
+    const queryClient = useQueryClient();
+    const [selectedStatus, setSelectedStatus] = useState<TaskStatus>(task.status);
+    const [interacted, setInteracted] = useState(false);
+
+    useEffect(() => {
+        setSelectedStatus(task.status);
+    }, [task.status]);
+
+    const { data: nextStatus } = useQuery({
+        queryKey: ["task", task.id, "next-status"],
+        queryFn: () => getNextStatus(task.id),
+        enabled: interacted,
+    });
+
+    const invalidate = () => {
+        void queryClient.invalidateQueries({ queryKey: SEARCH_QUERY_PREFIX });
+    };
+
+    const transitionMutation = useMutation({
+        mutationFn: (to_status: TaskStatus) => transitionTask(task.id, { to_status }),
+        onError: (error) => {
+            toast.error(
+                error instanceof ApiError ? error.message : "Não foi possível mover a tarefa."
+            );
+        },
+        onSettled: invalidate,
+    });
+
+    return (
+        <div className="flex items-center gap-1">
+            <select
+                aria-label={`Mover ${task.task_key}`}
+                value={selectedStatus}
+                onFocus={() => setInteracted(true)}
+                onChange={(event) => {
+                    const to_status = event.target.value as TaskStatus;
+                    setSelectedStatus(to_status);
+                    transitionMutation.mutate(to_status);
+                }}
+                disabled={transitionMutation.isPending}
+                className="rounded-md border border-slate-300 px-1 py-0.5 text-xs"
+            >
+                {BOARD_COLUMNS.map((column) => (
+                    <option key={column.status} value={column.status}>
+                        {column.label}
+                    </option>
+                ))}
+            </select>
+            {nextStatus?.suggested && (
+                <button
+                    type="button"
+                    disabled={transitionMutation.isPending}
+                    onClick={() => transitionMutation.mutate(nextStatus.suggested as TaskStatus)}
+                    className="text-xs text-sky-600 hover:underline whitespace-nowrap"
+                >
+                    → {statusLabel(nextStatus.suggested)}
+                </button>
+            )}
+        </div>
+    );
+}
+
+interface ListViewProps {
+    /** Ticket 11: pre-sets the role-based relevance filter server-side ("my_queue=true").
+     * Renders the same component, no separate screen (docs/tickets/minhas-tarefas-fila-avaliacao.md). */
+    presetMyQueue?: boolean;
+}
+
+export default function ListView({ presetMyQueue = false }: ListViewProps) {
     const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
     const sentinelRef = useRef<HTMLDivElement | null>(null);
 
     const { data, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
-        queryKey: ["tasks", "search", filters],
+        queryKey: ["tasks", "search", { presetMyQueue, ...filters }],
         queryFn: ({ pageParam }) =>
             searchTasks({
                 collaboratorIds: filters.collaboratorIds.length ? filters.collaboratorIds : undefined,
@@ -76,6 +166,7 @@ export default function ListView() {
                 q: filters.q || undefined,
                 cursor: pageParam,
                 limit: PAGE_SIZE,
+                myQueue: presetMyQueue || undefined,
             }),
         initialPageParam: undefined as string | undefined,
         getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
@@ -110,10 +201,23 @@ export default function ListView() {
     return (
         <div className="min-h-screen p-6 bg-slate-50">
             <div className="flex items-center justify-between mb-4">
-                <h1 className="text-xl font-bold text-slate-800">Visão em Lista</h1>
-                <Link to="/board" className="text-sm text-sky-600 hover:underline">
-                    Ver Board
-                </Link>
+                <h1 className="text-xl font-bold text-slate-800">
+                    {presetMyQueue ? "Minhas Tarefas / Fila de Avaliação" : "Visão em Lista"}
+                </h1>
+                <div className="flex items-center gap-3">
+                    {presetMyQueue ? (
+                        <Link to="/list" className="text-sm text-sky-600 hover:underline">
+                            Ver Lista Completa
+                        </Link>
+                    ) : (
+                        <Link to="/my-queue" className="text-sm text-sky-600 hover:underline">
+                            Minha Fila
+                        </Link>
+                    )}
+                    <Link to="/board" className="text-sm text-sky-600 hover:underline">
+                        Ver Board
+                    </Link>
+                </div>
             </div>
 
             <div className="flex flex-wrap gap-3 mb-4 bg-white p-3 rounded-lg border border-slate-200">
@@ -265,6 +369,9 @@ export default function ListView() {
                                             <td className="px-4 py-2">{task.updated_at}</td>
                                             <td className="px-4 py-2">
                                                 <BlockedByBadge blockedBy={task.blocked_by} />
+                                            </td>
+                                            <td className="px-4 py-2">
+                                                <InlineStatusChanger task={task} />
                                             </td>
                                         </tr>
                                     ))}

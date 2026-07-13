@@ -36,6 +36,7 @@ export default function App() {
                 <Route path="/login" element={<Login/>}/>
                 <Route path="/board" element={<RequireAuth><Board/></RequireAuth>}/>
                 <Route path="/list" element={<RequireAuth><ListView/></RequireAuth>}/>
+                <Route path="/my-queue" element={<RequireAuth><ListView presetMyQueue/></RequireAuth>}/>
                 <Route path="/tasks/:taskId" element={<RequireAuth><TaskDetail/></RequireAuth>}/>
             </Routes>
         </>

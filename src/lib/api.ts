@@ -180,6 +180,9 @@ export interface TaskSearchParams {
     q?: string;
     cursor?: string;
     limit?: number;
+    /** Server-side role-based relevance filter (ticket 11) — status compatible with the
+     * caller's role AND (collaborator OR unassigned). Omitted entirely when falsy. */
+    myQueue?: boolean;
 }
 
 export interface TaskSearchResult {
@@ -216,6 +219,7 @@ function buildSearchQuery(params: TaskSearchParams): string {
     for (const tag of params.tags ?? []) query.append("tags", tag);
     if (params.q) query.set("q", params.q);
     if (params.cursor) query.set("cursor", params.cursor);
+    if (params.myQueue) query.set("my_queue", "true");
     query.set("limit", String(params.limit ?? 30));
     return query.toString();
 }
