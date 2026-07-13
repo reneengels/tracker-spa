@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router";
 import Board from "../../pages/Board.tsx";
 
 const BOARD_COLUMNS = [
@@ -20,7 +21,9 @@ function renderBoard() {
     const queryClient = new QueryClient();
     return render(
         <QueryClientProvider client={queryClient}>
-            <Board />
+            <MemoryRouter>
+                <Board />
+            </MemoryRouter>
         </QueryClientProvider>
     );
 }

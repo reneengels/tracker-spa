@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { DragEvent, FormEvent } from "react";
+import { Link } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { createTask, joinTask, leaveTask, listTasks, transitionTask, type Task } from "@/lib/api";
@@ -7,41 +8,10 @@ import { ApiError } from "@/lib/api";
 import { BOARD_COLUMNS, type TaskStatus } from "@/lib/taskStatus";
 import { Button } from "@/components/ui/button.tsx";
 import { useAuth } from "@/lib/auth";
+import { CollaboratorAvatars } from "@/components/CollaboratorAvatars";
 
 const TASKS_QUERY_KEY = ["tasks"] as const;
 const DRAG_DATA_FORMAT = "application/x-factory-task-id";
-
-function initials(name: string): string {
-    return name
-        .split(" ")
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((part) => part[0]?.toUpperCase())
-        .join("");
-}
-
-function CollaboratorAvatars({ collaborators }: { collaborators: Task["collaborators"] }) {
-    if (collaborators.length === 0) {
-        return <span className="text-xs text-slate-400">Sem colaboradores</span>;
-    }
-    return (
-        <div className="flex -space-x-2">
-            {collaborators.map((collaborator) => (
-                <span
-                    key={collaborator.id}
-                    role="img"
-                    aria-label={`${collaborator.name} (${collaborator.type === "ai_agent" ? "agente" : "humano"})`}
-                    title={collaborator.name}
-                    className={`inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-white text-[10px] font-semibold text-white ${
-                        collaborator.type === "ai_agent" ? "bg-violet-500" : "bg-sky-500"
-                    }`}
-                >
-                    {initials(collaborator.name)}
-                </span>
-            ))}
-        </div>
-    );
-}
 
 function BlockedByBadge({ blockedBy }: { blockedBy: Task["blocked_by"] }) {
     if (blockedBy.length === 0) {
@@ -96,7 +66,14 @@ function TaskCard({ task }: { task: Task }) {
             className="bg-white rounded-md border border-slate-200 shadow-sm p-2 mb-2 cursor-grab active:cursor-grabbing"
         >
             <div className="flex items-start justify-between gap-2">
-                <p className="text-xs font-mono text-slate-400">{task.task_key}</p>
+                <Link
+                    to={`/tasks/${task.id}`}
+                    draggable={false}
+                    onClick={(event) => event.stopPropagation()}
+                    className="text-xs font-mono text-slate-400 hover:underline hover:text-sky-600"
+                >
+                    {task.task_key}
+                </Link>
                 <BlockedByBadge blockedBy={task.blocked_by} />
             </div>
             <p className="text-sm font-medium text-slate-800">{task.title}</p>

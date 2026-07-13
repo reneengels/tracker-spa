@@ -103,6 +103,65 @@ export interface AddDependencyRequest {
     depends_on_task_id: string;
 }
 
+export interface ActorRef {
+    id: string;
+    name: string;
+    type: "human" | "ai_agent";
+}
+
+export interface TaskComment {
+    id: string;
+    body: string;
+    author: ActorRef;
+    transition_id: string | null;
+    created_at: string;
+}
+
+export interface StatusTransitionEntry {
+    id: string;
+    from_status: TaskStatus;
+    to_status: TaskStatus;
+    reason: string | null;
+    actor: ActorRef;
+    created_at: string;
+}
+
+export interface CodeArtifact {
+    id: string;
+    kind: "PR" | "BRANCH" | "COMMIT";
+    url: string;
+    label: string;
+    created_by: string;
+    created_at: string;
+}
+
+export interface TaskDetail extends Task {
+    comments: TaskComment[];
+    transitions: StatusTransitionEntry[];
+    code_artifacts: CodeArtifact[];
+}
+
+export interface UpdateTaskRequest {
+    version: number;
+    title?: string;
+    description?: string;
+    priority?: Task["priority"];
+    due_date?: string | null;
+    estimate_value?: number | null;
+    estimate_unit?: Task["estimate_unit"];
+    type?: Task["type"];
+    tags?: string[] | null;
+    demand_source?: Task["demand_source"];
+    return_count?: number;
+    rework_origin_stage?: string | null;
+    last_return_reason?: string | null;
+}
+
+export interface NextStatusResponse {
+    suggested: TaskStatus | null;
+    valid_transitions: TaskStatus[];
+}
+
 async function extractErrorMessage(response: Response, fallback: string): Promise<string> {
     try {
         const body = (await response.json()) as { message?: string };
@@ -228,5 +287,59 @@ export async function removeDependency(
         );
     }
     const envelope = (await response.json()) as SuccessEnvelope<Task>;
+    return envelope.data;
+}
+
+export async function getTask(taskId: string): Promise<TaskDetail> {
+    const response = await authenticatedFetch(`/tasks/${taskId}`);
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível carregar a tarefa."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<TaskDetail>;
+    return envelope.data;
+}
+
+export async function updateTask(taskId: string, input: UpdateTaskRequest): Promise<Task> {
+    const response = await authenticatedFetch(`/tasks/${taskId}`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+    });
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível salvar as alterações."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<Task>;
+    return envelope.data;
+}
+
+export async function getNextStatus(taskId: string): Promise<NextStatusResponse> {
+    const response = await authenticatedFetch(`/tasks/${taskId}/next-status`);
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível calcular o próximo status."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<NextStatusResponse>;
+    return envelope.data;
+}
+
+export async function addComment(taskId: string, body: string): Promise<TaskDetail> {
+    const response = await authenticatedFetch(`/tasks/${taskId}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ body }),
+    });
+    if (!response.ok) {
+        throw new ApiError(
+            await extractErrorMessage(response, "Não foi possível adicionar o comentário."),
+            response.status
+        );
+    }
+    const envelope = (await response.json()) as SuccessEnvelope<TaskDetail>;
     return envelope.data;
 }

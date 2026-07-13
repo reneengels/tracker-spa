@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, within, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router";
 import { Toaster } from "sonner";
 import { http, HttpResponse } from "msw";
 import { server } from "../mocks/server";
@@ -26,10 +27,12 @@ function renderBoard() {
     const queryClient = new QueryClient();
     return render(
         <QueryClientProvider client={queryClient}>
-            <AuthProvider>
-                <Toaster />
-                <Board />
-            </AuthProvider>
+            <MemoryRouter>
+                <AuthProvider>
+                    <Toaster />
+                    <Board />
+                </AuthProvider>
+            </MemoryRouter>
         </QueryClientProvider>
     );
 }

@@ -1,5 +1,6 @@
 import { http, HttpResponse } from "msw";
-import type { Task } from "@/lib/api";
+import type { StatusTransitionEntry, Task, TaskComment, TaskDetail } from "@/lib/api";
+import type { TaskStatus } from "@/lib/taskStatus";
 
 export const VALID_ACCESS_TOKEN =
     "eyJhbGciOiAiSFMyNTYiLCAidHlwIjogIkpXVCJ9." +
@@ -9,13 +10,56 @@ export const VALID_ACCESS_TOKEN =
 /** The actor id encoded in `VALID_ACCESS_TOKEN`'s `sub` claim — join/leave mocks act as this user. */
 export const MOCK_CURRENT_ACTOR = { id: "po-user", name: "PO User", type: "human" as const };
 
+/** Mirrors TransitionService's flow graph (tracker-api) for mock validation. */
+const TRANSITION_GRAPH: Record<TaskStatus, TaskStatus[]> = {
+    TRIAGEM: ["BACKLOG", "REJEITADO_CANCELADO"],
+    BACKLOG: ["FILA", "REJEITADO_CANCELADO"],
+    FILA: ["EM_PROGRESSO"],
+    REWORK: ["EM_PROGRESSO"],
+    EM_PROGRESSO: ["REVIEW_AGENTICO"],
+    REVIEW_AGENTICO: ["REVIEW_HUMANO", "EM_PROGRESSO"],
+    REVIEW_HUMANO: ["QA", "REWORK"],
+    QA: ["PRONTO", "REWORK"],
+    PRONTO: [],
+    REJEITADO_CANCELADO: [],
+};
+
+/** Mirrors TransitionService's "primary forward edge" suggestion for the next-status shortcut. */
+const SUGGESTED_NEXT: Partial<Record<TaskStatus, TaskStatus>> = {
+    TRIAGEM: "BACKLOG",
+    BACKLOG: "FILA",
+    FILA: "EM_PROGRESSO",
+    REWORK: "EM_PROGRESSO",
+    EM_PROGRESSO: "REVIEW_AGENTICO",
+    REVIEW_AGENTICO: "REVIEW_HUMANO",
+    REVIEW_HUMANO: "QA",
+    QA: "PRONTO",
+};
+
 let tasks: Task[] = [];
 let nextSequence = 1;
+let commentsByTask: Record<string, TaskComment[]> = {};
+let transitionsByTask: Record<string, StatusTransitionEntry[]> = {};
+let nextCommentId = 1;
+let nextTransitionId = 1;
 
 /** Resets the in-memory mock task store; call between tests to avoid leakage. */
 export function resetTasks(seed: Task[] = []): void {
     tasks = seed.map((task) => ({ ...task }));
     nextSequence = tasks.length + 1;
+    commentsByTask = {};
+    transitionsByTask = {};
+    nextCommentId = 1;
+    nextTransitionId = 1;
+}
+
+function toDetail(task: Task): TaskDetail {
+    return {
+        ...task,
+        comments: commentsByTask[task.id] ?? [],
+        transitions: transitionsByTask[task.id] ?? [],
+        code_artifacts: [],
+    };
 }
 
 export function makeTask(overrides: Partial<Task> = {}): Task {
@@ -68,14 +112,64 @@ export const handlers = [
         return HttpResponse.json({ success: true, message: "OK", data: tasks });
     }),
 
-    http.post("http://localhost:8000/tasks", async ({ request }) => {
-        const body = (await request.json()) as { title: string; description: string };
-        const task = makeTask({ title: body.title, description: body.description });
-        tasks.push(task);
-        return HttpResponse.json(
-            { success: true, message: "Task created", data: task },
-            { status: 201 }
-        );
+    http.get("http://localhost:8000/tasks/:id", ({ params }) => {
+        const task = tasks.find((candidate) => candidate.id === params.id);
+        if (!task) {
+            return new HttpResponse(null, { status: 404 });
+        }
+        return HttpResponse.json({ success: true, message: "OK", data: toDetail(task) });
+    }),
+
+    http.patch("http://localhost:8000/tasks/:id", async ({ params, request }) => {
+        const task = tasks.find((candidate) => candidate.id === params.id);
+        if (!task) {
+            return new HttpResponse(null, { status: 404 });
+        }
+        const body = (await request.json()) as Partial<Task> & { version: number };
+        if (body.version !== task.version) {
+            return HttpResponse.json(
+                {
+                    success: false,
+                    error_code: "STALE_VERSION",
+                    message: "Esta tarefa foi alterada por outra pessoa. Recarregue e tente novamente.",
+                },
+                { status: 409 }
+            );
+        }
+        Object.assign(task, body, { version: task.version + 1 });
+        return HttpResponse.json({ success: true, message: "Task updated", data: task });
+    }),
+
+    http.get("http://localhost:8000/tasks/:id/next-status", ({ params }) => {
+        const task = tasks.find((candidate) => candidate.id === params.id);
+        if (!task) {
+            return new HttpResponse(null, { status: 404 });
+        }
+        return HttpResponse.json({
+            success: true,
+            message: "OK",
+            data: {
+                suggested: SUGGESTED_NEXT[task.status] ?? null,
+                valid_transitions: TRANSITION_GRAPH[task.status],
+            },
+        });
+    }),
+
+    http.post("http://localhost:8000/tasks/:id/comments", async ({ params, request }) => {
+        const task = tasks.find((candidate) => candidate.id === params.id);
+        if (!task) {
+            return new HttpResponse(null, { status: 404 });
+        }
+        const body = (await request.json()) as { body: string };
+        const comment: TaskComment = {
+            id: `comment-${nextCommentId++}`,
+            body: body.body,
+            author: MOCK_CURRENT_ACTOR,
+            transition_id: null,
+            created_at: new Date(0).toISOString(),
+        };
+        commentsByTask[task.id] = [...(commentsByTask[task.id] ?? []), comment];
+        return HttpResponse.json({ success: true, message: "Comment added", data: toDetail(task) });
     }),
 
     http.post("http://localhost:8000/tasks/:id/transitions", async ({ params, request }) => {
@@ -84,7 +178,42 @@ export const handlers = [
         if (!task) {
             return new HttpResponse(null, { status: 404 });
         }
+        if (!TRANSITION_GRAPH[task.status].includes(body.to_status)) {
+            return HttpResponse.json(
+                {
+                    success: false,
+                    error_code: "INVALID_TRANSITION",
+                    message: `Não é possível mover de ${task.status} para ${body.to_status}.`,
+                },
+                { status: 409 }
+            );
+        }
+        const transitionId = `transition-${nextTransitionId++}`;
+        transitionsByTask[task.id] = [
+            ...(transitionsByTask[task.id] ?? []),
+            {
+                id: transitionId,
+                from_status: task.status,
+                to_status: body.to_status,
+                reason: body.reason ?? null,
+                actor: MOCK_CURRENT_ACTOR,
+                created_at: new Date(0).toISOString(),
+            },
+        ];
+        if (body.reason) {
+            commentsByTask[task.id] = [
+                ...(commentsByTask[task.id] ?? []),
+                {
+                    id: `comment-${nextCommentId++}`,
+                    body: body.reason,
+                    author: MOCK_CURRENT_ACTOR,
+                    transition_id: transitionId,
+                    created_at: new Date(0).toISOString(),
+                },
+            ];
+        }
         task.status = body.to_status;
+        task.version += 1;
         return HttpResponse.json({ success: true, message: "Task transitioned", data: task });
     }),
 

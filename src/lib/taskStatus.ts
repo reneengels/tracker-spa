@@ -22,3 +22,11 @@ export const BOARD_COLUMNS: ReadonlyArray<{ status: TaskStatus; label: string }>
     { status: "PRONTO", label: "Pronto" },
     { status: "REJEITADO_CANCELADO", label: "Rejeitado/Cancelado" },
 ];
+
+const STATUS_LABELS: Record<TaskStatus, string> = Object.fromEntries(
+    BOARD_COLUMNS.map(({ status, label }) => [status, label])
+) as Record<TaskStatus, string>;
+
+export function statusLabel(status: TaskStatus): string {
+    return STATUS_LABELS[status];
+}
