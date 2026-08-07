@@ -1,0 +1,121 @@
+# Ticket 15 E2E orchestration.
+#
+# Combined with tracker-api's own docker-compose.yml via multiple `-f`
+# flags (see package.json's `test:e2e` script) — this file never modifies
+# that one, it only adds to / overrides pieces of the SAME merged project:
+#
+#   - container_name overrides for db/migrate/pgbouncer/api/mcp so this
+#     isolated E2E stack can coexist with an already-running dev stack
+#     (container names are global to the Docker daemon, not project-scoped,
+#     so the base file's hardcoded names would otherwise collide).
+#   - a one-shot `seed` service that bootstraps the first human Actor
+#     directly in the test database (see seed_admin.py).
+#   - a `playwright` service that runs the actual E2E suite. It uses
+#     Microsoft's official Playwright image, which bundles Chromium and
+#     its shared-library dependencies (this sandbox has no root/apt access
+#     to install them directly, and Playwright's own `--with-deps` install
+#     needs sudo too) — running the test runner as a container sidesteps
+#     that entirely. It's joined to the same Docker network as `api`/`mcp`,
+#     so it resolves them by service name directly; Playwright's own
+#     `webServer` option (see playwright.config.ts) starts the SPA's Vite
+#     dev server INSIDE this same container, so the browser's same-origin
+#     fetch calls to `api` also resolve via that shared network.
+#
+# `nginx`/production topology from ticket 14 isn't needed here — ticket 15
+# only asks for "tracker-api + Postgres de teste real", and the SPA's own
+# dev server is simpler for a test loop than the built static bundle.
+#
+# Path note: Compose resolves every relative path (build contexts, volume
+# mounts) against the PROJECT DIRECTORY, which defaults to the directory
+# of the FIRST `-f` file — tracker-api's, per package.json's `test:e2e`
+# script (`-f ../tracker-api/docker-compose.yml -f e2e/docker-compose.e2e.yml`).
+# So paths below are written relative to tracker-api's directory, not to
+# this file's own location, even though this file lives in tracker-spa.
+services:
+  db:
+    container_name: tracker-e2e-db
+    # `ports` merges by concatenation across -f files by default, so a
+    # plain override here would try to bind BOTH 5432 and 5433 (colliding
+    # with a coexisting dev stack on 5432) — `!override` replaces instead.
+    ports: !override
+      - "5433:5432"
+
+  migrate:
+    container_name: tracker-e2e-migrate
+
+  pgbouncer:
+    container_name: tracker-e2e-pgbouncer
+    ports: !override
+      - "6433:6432"
+
+  api:
+    container_name: tracker-e2e-api
+    ports: !override
+      - "8002:8000"
+    # The SPA's Vite dev server (started by Playwright's webServer inside
+    # the `playwright` container) runs on localhost:5173 from the
+    # browser's perspective — not in the base compose file's default
+    # CORS allow-list (3000/8080), so the browser's real login fetch gets
+    # silently CORS-blocked without this override. Pure env var override,
+    # no tracker-api code/config file touched.
+    environment:
+      - CORS_ORIGINS=["http://localhost:5173"]
+
+  mcp:
+    container_name: tracker-e2e-mcp
+    # No port/env overrides needed here — the E2E MCP client (e2e/mcp-client.ts)
+    # reaches this service via the shared Docker network by its service name.
+    # That file documents two environment-specific issues (an upstream
+    # Node/undici bug, and FastMCP's DNS-rebinding Host-header check) worked
+    # around entirely client-side — nothing here or in tracker-api changed.
+
+  seed:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tracker-e2e-seed
+    volumes:
+      - ../tracker-spa/e2e/seed_admin.py:/code/seed_admin.py:ro
+    command: ["/code/.venv/bin/python", "/code/seed_admin.py"]
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-tracker}:${POSTGRES_PASSWORD:-tracker}@pgbouncer:6432/${POSTGRES_DB:-tracker}
+      - E2E_ADMIN_EMAIL=${E2E_ADMIN_EMAIL:-e2e-admin@factory.dev}
+      - E2E_ADMIN_PASSWORD=${E2E_ADMIN_PASSWORD:-e2e-password-123}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      pgbouncer:
+        condition: service_started
+    networks:
+      - tracker-network
+
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.61.1-noble
+    container_name: tracker-e2e-playwright
+    working_dir: /work
+    volumes:
+      - ../tracker-spa:/work
+    environment:
+      - E2E_API_URL=http://api:8000
+      - E2E_MCP_URL=http://mcp:8001/mcp
+      - E2E_ADMIN_EMAIL=${E2E_ADMIN_EMAIL:-e2e-admin@factory.dev}
+      - E2E_ADMIN_PASSWORD=${E2E_ADMIN_PASSWORD:-e2e-password-123}
+      - VITE_API_URL=http://api:8000
+      - CI=true
+      - HOME=/tmp
+    depends_on:
+      api:
+        condition: service_healthy
+      mcp:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+    networks:
+      - tracker-network
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        set -eu
+        corepack enable
+        yarn install --immutable
+        npx playwright test --config=e2e/playwright.config.ts
